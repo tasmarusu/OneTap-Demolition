@@ -111,7 +111,7 @@ namespace OneTapDemolition
 
         private void OnStageStarted(StageSpec spec, int shots)
         {
-            readyInfo.text = "押して狙う → 離して崩す    ショット " + shots;
+            readyInfo.text = "押して狙う → 倍率が高い瞬間に離す    ショット " + shots;
         }
 
         private void OnStateChanged(GameState state)

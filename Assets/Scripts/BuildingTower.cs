@@ -28,6 +28,7 @@ namespace OneTapDemolition
         private StageSpec spec;
         private int limit;
         private bool resolving;
+        private float chainTime;
 
         public StageSpec Spec => spec;
         public int FloorCount => floors.Count;
@@ -82,7 +83,7 @@ namespace OneTapDemolition
             }
 
             float historyBonus = ScoreManager.Instance != null ? ScoreManager.Instance.HistoryBonus : 0f;
-            score = ScoreRules.SimulateTap(spec.Floors, index, limit, historyBonus);
+            score = ScoreRules.SimulateTap(spec.Floors, index, limit, historyBonus, GateClock.Now);
             return true;
         }
 
@@ -131,9 +132,38 @@ namespace OneTapDemolition
             SetAimPreview(-1);
 
             int startIndex = tappedFloor.FloorIndex;
+
+            // 離した瞬間のゲート倍率でこの一撃の連鎖を確定する(見えていた倍率がそのまま掛かる)
+            chainTime = GateClock.Now;
+            for (int i = startIndex; i < limit; i++)
+            {
+                floors[i]?.LockGate(chainTime);
+            }
+            PraiseTiming(startIndex);
             JuiceManager.Instance?.TriggerImpact(limit - startIndex);
             StartCoroutine(CollapseFromFloor(startIndex, hitPoint));
             return true;
+        }
+
+        /// <summary>
+        /// ゲートの最良の瞬間にぴったり離せたら褒める(狙いが外れたときは何も言わない)。
+        /// </summary>
+        private void PraiseTiming(int startIndex)
+        {
+            if (!ScoreRules.HasLiveGate(spec.Floors, startIndex, limit))
+            {
+                return;
+            }
+
+            float historyBonus = ScoreManager.Instance != null ? ScoreManager.Instance.HistoryBonus : 0f;
+            float bestTime;
+            int best = ScoreRules.BestTapScore(spec.Floors, startIndex, limit, historyBonus, out bestTime);
+            int actual = ScoreRules.SimulateTap(spec.Floors, startIndex, limit, historyBonus, chainTime);
+            if (actual >= best)
+            {
+                ScoreFeedbackUI.Instance?.ShowBanner("PERFECT TIMING!", new Color(1f, 0.85f, 0.2f, 1f));
+                JuiceManager.Instance?.PlayStarNote(2);
+            }
         }
 
         private IEnumerator CollapseFromFloor(int startIndex, Vector3 hitPoint)
@@ -158,9 +188,14 @@ namespace OneTapDemolition
 
                 if (spec.Kind == FloorKind.Gate)
                 {
-                    gateProduct *= spec.GateValue;
-                    ScoreFeedbackUI.Instance?.ShowGateBanner(spec.GateValue, gateProduct);
-                    JuiceManager.Instance?.PlayGate(gateProduct);
+                    float gateValue = spec.ValueAt(chainTime);
+                    gateProduct *= gateValue;
+                    if (!Mathf.Approximately(gateValue, 1f))
+                    {
+                        // ×1は何も起きない瞬間なので、バナーも音も出さない
+                        ScoreFeedbackUI.Instance?.ShowGateBanner(gateValue, gateProduct);
+                        JuiceManager.Instance?.PlayGate(gateProduct);
+                    }
                 }
 
                 Vector3 floorPosition = floor.transform.position;

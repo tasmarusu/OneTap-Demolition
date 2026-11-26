@@ -88,34 +88,40 @@ namespace OneTapDemolition
                 StageSpec spec = gm.CurrentSpec;
                 float historyBonus = ScoreManager.Instance != null ? ScoreManager.Instance.HistoryBonus : 0f;
                 List<int> plan = new List<int>();
+                List<float> planTimes = new List<float>();
                 if (oneTap)
                 {
                     int bestTap = -1;
                     int bestScore = -1;
+                    float bestTime = 0f;
                     for (int j = 0; j < spec.Floors.Length; j++)
                     {
                         if (!ScoreRules.ChainIncludesBonus(spec.Floors, j, spec.Floors.Length))
                         {
                             continue;
                         }
-                        int sc = ScoreRules.SimulateTap(spec.Floors, j, spec.Floors.Length, historyBonus);
+                        float t;
+                        int sc = ScoreRules.BestTapScore(spec.Floors, j, spec.Floors.Length, historyBonus, out t);
                         if (sc > bestScore)
                         {
                             bestScore = sc;
                             bestTap = j;
+                            bestTime = t;
                         }
                     }
                     plan.Add(bestTap);
+                    planTimes.Add(bestTime);
                 }
-                else if (!ScoreRules.FindThreeStarPlan(spec, historyBonus, plan))
+                else if (!ScoreRules.FindThreeStarPlan(spec, historyBonus, plan, planTimes))
                 {
                     noPlan++;
                     lines.AppendLine("stage " + stage + ": NO PLAN (solver says 3 stars impossible)");
                     continue;
                 }
 
-                foreach (int index in plan)
+                for (int shot = 0; shot < plan.Count; shot++)
                 {
+                    int index = plan[shot];
                     yield return WaitUntilPlayableOrResult(gm);
                     if (lastResult != null)
                     {
@@ -124,6 +130,8 @@ namespace OneTapDemolition
 
                     BuildingTower tower = gm.CurrentTower;
                     Floor floor = tower.Floors[index];
+                    // 最良の時刻を狙って撃つ(実機なら、その瞬間を待って離すのと同じ)
+                    GateClock.Now = planTimes[shot];
                     if (!tower.RequestDemolish(floor, floor.transform.position + Vector3.back * 0.5f))
                     {
                         lines.AppendLine("stage " + stage + ": shot at floor " + index + " was REJECTED");

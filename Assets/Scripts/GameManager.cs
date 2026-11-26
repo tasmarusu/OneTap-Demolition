@@ -109,6 +109,12 @@ namespace OneTapDemolition
             }
         }
 
+        private void Update()
+        {
+            // ライブゲートの共通時計。見えている倍率と、離した瞬間に確定する倍率を同じ時刻で決める
+            GateClock.Now += Time.deltaTime;
+        }
+
         private void Start()
         {
             // ScoreManagerのAwakeがこのOnEnableより後の場合に備えて、ここでも購読を保証する
@@ -128,6 +134,7 @@ namespace OneTapDemolition
         public void PrepareStage(int stageIndex, int extraShots)
         {
             CancelInvoke(nameof(ShowResult));
+            GateClock.Now = 0f;
             if (currentTower != null)
             {
                 Destroy(currentTower.gameObject);

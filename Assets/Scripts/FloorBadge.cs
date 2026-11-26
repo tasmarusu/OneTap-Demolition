@@ -14,6 +14,11 @@ namespace OneTapDemolition
         private Camera cam;
         private bool pulse;
         private Renderer targetRenderer;
+        private Text labelText;
+        private Image backgroundImage;
+        private Color baseColor;
+        private float warning;
+        private float popAmount;
 
         public static FloorBadge Create(Transform floor, string label, Color color, float towardCameraDistance)
         {
@@ -41,6 +46,8 @@ namespace OneTapDemolition
             bgImage.type = Image.Type.Sliced;
             bgImage.color = new Color(color.r * 0.55f, color.g * 0.55f, color.b * 0.55f, 0.92f);
             bgImage.raycastTarget = false;
+            badge.backgroundImage = bgImage;
+            badge.baseColor = color;
 
             GameObject textGO = new GameObject("Label", typeof(RectTransform), typeof(Text), typeof(Outline));
             textGO.transform.SetParent(root.transform, false);
@@ -56,6 +63,7 @@ namespace OneTapDemolition
             text.fontSize = label.Length > 3 ? 48 : 68;
             text.color = Color.Lerp(color, Color.white, 0.55f);
             text.raycastTarget = false;
+            badge.labelText = text;
             Outline outline = textGO.GetComponent<Outline>();
             outline.effectColor = new Color(0f, 0f, 0f, 0.9f);
             outline.effectDistance = new Vector2(2f, -2f);
@@ -84,6 +92,47 @@ namespace OneTapDemolition
             return badge;
         }
 
+        /// <summary>ライブゲートの倍率が変わったときに、看板の文字と色を差し替える。</summary>
+        public void SetLabel(string label, Color color)
+        {
+            baseColor = color;
+            if (labelText != null)
+            {
+                labelText.text = label;
+                labelText.fontSize = label.Length > 3 ? 48 : 68;
+            }
+            ApplyColors();
+        }
+
+        /// <summary>倍率が変わる直前の予告(0〜1)。1に近いほど文字が白く光る。</summary>
+        public void SetWarning(float amount)
+        {
+            if (Mathf.Approximately(amount, warning))
+            {
+                return;
+            }
+            warning = amount;
+            ApplyColors();
+        }
+
+        /// <summary>倍率が切り替わった瞬間に看板をぽんと大きくする。</summary>
+        public void Pop()
+        {
+            popAmount = 0.25f;
+        }
+
+        private void ApplyColors()
+        {
+            if (backgroundImage != null)
+            {
+                backgroundImage.color = new Color(baseColor.r * 0.55f, baseColor.g * 0.55f, baseColor.b * 0.55f, 0.92f);
+            }
+            if (labelText != null)
+            {
+                labelText.color = Color.Lerp(Color.Lerp(baseColor, Color.white, 0.55f), Color.white, warning);
+            }
+        }
+
         public void Detach()
         {
             Destroy(gameObject);
@@ -109,11 +158,13 @@ namespace OneTapDemolition
             float depth = targetRenderer != null ? targetRenderer.bounds.extents.z : 1f;
             transform.position = target.position + new Vector3(0f, 0f, -(depth + 0.06f));
             transform.rotation = Quaternion.identity;
+            popAmount = Mathf.MoveTowards(popAmount, 0f, Time.unscaledDeltaTime * 1.6f);
+            float scale = 0.0095f * (1f + popAmount);
             if (pulse)
             {
-                float s = 0.0095f * (1f + 0.12f * Mathf.Sin(Time.time * 5f));
-                transform.localScale = Vector3.one * s;
+                scale *= 1f + 0.12f * Mathf.Sin(Time.time * 5f);
             }
+            transform.localScale = Vector3.one * scale;
         }
     }
 }

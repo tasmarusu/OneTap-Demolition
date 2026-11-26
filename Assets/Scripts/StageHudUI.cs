@@ -56,6 +56,8 @@ namespace OneTapDemolition
         private Button hintButton;
         private Text hintText;
         private int hintIndex = -1;
+        private int hintBest;
+        private bool hintLive;
         private int hintStage;
         private int pulseSlotCount;
 
@@ -257,9 +259,10 @@ namespace OneTapDemolition
 
             hintIndex = first;
             hintStage = stageToken;
-            int current = ScoreManager.Instance != null ? ScoreManager.Instance.CurrentScore : 0;
-            int reachable = current + bestFromHere;
-            hintText.text = reachable >= spec.OptimalScore ? "ここ!\n満点コース" : "ここ!\n最大 " + reachable;
+            float bestTime;
+            hintBest = ScoreRules.BestTapScore(spec.Floors, first, gm.CurrentTower.AliveCount, historyBonus, out bestTime);
+            hintLive = ScoreRules.HasLiveGate(spec.Floors, first, gm.CurrentTower.AliveCount);
+            hintText.text = "ここ!";
             hintButton.gameObject.SetActive(false);
             JuiceManager.Instance?.PlayStarNote(1);
         }
@@ -304,6 +307,11 @@ namespace OneTapDemolition
             float scale = canvasRect.lossyScale.x;
             float width = hintText.rectTransform.sizeDelta.x * scale;
             float left = Mathf.Min(c.x + 30f * scale, Screen.width - width);
+            // ライブゲートがあるなら「待て/今だ!」で離す瞬間を教える
+            int predictedNow;
+            gm.CurrentTower.PredictTap(hintIndex, out predictedNow);
+            bool goNow = !hintLive || predictedNow >= hintBest;
+            hintText.text = goNow ? "今だ!\n離せ!" : "ここ!\n待て…";
             hintText.rectTransform.pivot = new Vector2(0f, 0.5f);
             hintText.rectTransform.position = new Vector3(left, c.y + 60f * scale, 0f);
             hintText.color = Color.Lerp(new Color(0.7f, 1f, 0.7f, 1f), Color.white, pulse);
@@ -820,9 +828,19 @@ namespace OneTapDemolition
             int starCount = (bonus ? 1 : 0) + (max ? 1 : 0) + (overshoot ? 1 : 0);
             pulseSlotCount = starCount;
 
+            // ライブゲートがあるとき、いま離すのが最良の瞬間なら NOW! で知らせる(離すタイミングの合図)
+            float historyBonus = ScoreManager.Instance != null ? ScoreManager.Instance.HistoryBonus : 0f;
+            bool atBest = false;
+            if (ScoreRules.HasLiveGate(spec.Floors, tapIndex, alive))
+            {
+                float bestTime;
+                int bestHere = ScoreRules.BestTapScore(spec.Floors, tapIndex, alive, historyBonus, out bestTime);
+                atBest = predicted >= bestHere;
+            }
+
             aimText.gameObject.SetActive(true);
-            aimText.text = "+" + predicted + (reachesMax ? "  CLEAR!" : "");
-            aimText.color = reachesMax ? FillMax : GoodColor;
+            aimText.text = "+" + predicted + (reachesMax ? "  CLEAR!" : "") + (atBest ? "  NOW!" : "");
+            aimText.color = atBest ? new Color(1f, 0.95f, 0.3f, 1f) : (reachesMax ? FillMax : GoodColor);
             for (int i = 0; i < aimStars.Length; i++)
             {
                 aimStars[i].gameObject.SetActive(i < starCount);

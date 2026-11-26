@@ -12,7 +12,23 @@ namespace OneTapDemolition
         private const int MinFloors = 6;
         private const int MaxFloors = 10;
         private const int MaxRerolls = 80;
+        /// <summary>falseにすると、ゲートは従来の固定倍率に戻る(ライブゲートを無効化する安全スイッチ)。</summary>
+        public const bool LiveGates = true;
+
         private static readonly float[] GoodGateValues = { 2f, 3f };
+        // ライブゲートの倍率の並び(同じ長さずつ続く)。×1は「効かない」瞬間、÷2は罠の瞬間
+        private static readonly float[][] EasyPatterns = { new[] { 2f, 1f }, new[] { 3f, 1f } };
+        private static readonly float[][] MidPatterns =
+        {
+            new[] { 2f, 1f }, new[] { 3f, 1f }, new[] { 3f, 1f, 1f, 1f }, new[] { 2f, 1f, 0.5f, 1f }
+        };
+        private static readonly float[][] HardPatterns =
+        {
+            new[] { 3f, 1f, 1f, 1f }, new[] { 2f, 1f, 0.5f, 1f }, new[] { 2f, 0.5f }, new[] { 3f, 1f, 0.5f }, new[] { 3f, 1f }
+        };
+        private const float SlowPeriod = 3.6f;
+        private const float FastPeriod = 2.4f;
+        private const float PhaseStep = 0.3f;
         private const float BadGateValue = 0.5f;
         private const float TargetRatio = 0.6f;
         private const float StarRatio = 0.75f;
@@ -84,7 +100,9 @@ namespace OneTapDemolition
                 int idx = PickFreeIndex(rng, floors, 1, floorCount);
                 if (idx >= 0)
                 {
-                    floors[idx] = FloorSpec.Gate(GoodGateValues[rng.Next(GoodGateValues.Length)]);
+                    floors[idx] = LiveGates
+                        ? MakeLiveGate(rng, stageIndex)
+                        : FloorSpec.Gate(GoodGateValues[rng.Next(GoodGateValues.Length)]);
                 }
             }
 
@@ -98,6 +116,12 @@ namespace OneTapDemolition
             int firstTap;
             int optimal = ScoreRules.BestScore(floors, floorCount, shots, historyBonus, out firstTap);
             int target = Mathf.Max(ScoreRounding * 2, RoundTo(optimal * TargetRatio));
+            if (LiveGates && shots == 1)
+            {
+                // 入門(1ショット)のステージは、タイミングを気にせず撃ってもクリアはできる。☆3つ目から腕前が要る
+                int guaranteed = ScoreRules.GuaranteedSingleTap(floors, historyBonus);
+                target = Mathf.Min(target, Mathf.Max(ScoreRounding * 2, (int)(guaranteed * 0.9f) / ScoreRounding * ScoreRounding));
+            }
             int star = Mathf.Max(target + ScoreRounding, RoundTo(optimal * StarRatio));
 
             return new StageSpec
@@ -110,6 +134,24 @@ namespace OneTapDemolition
                 TargetScore = target,
                 StarScore = star
             };
+        }
+
+        /// <summary>
+        /// ステージが進むほど、速く(2.4秒周期)て短い窓の、読み合いの多いパターンが増える。位相は0.3秒刻み。
+        /// </summary>
+        private static FloorSpec MakeLiveGate(System.Random rng, int stageIndex)
+        {
+            float[][] patterns = stageIndex <= 5 ? EasyPatterns : (stageIndex <= 11 ? MidPatterns : HardPatterns);
+            float[] pattern = patterns[rng.Next(patterns.Length)];
+            if (stageIndex <= 2)
+            {
+                pattern = EasyPatterns[0];
+            }
+
+            float fastChance = stageIndex <= 5 ? 0f : (stageIndex <= 11 ? 0.3f : 0.5f);
+            float period = rng.NextDouble() < fastChance ? FastPeriod : SlowPeriod;
+            float phase = PhaseStep * rng.Next(0, Mathf.RoundToInt(period / PhaseStep));
+            return FloorSpec.LiveGate(pattern, period, phase);
         }
 
         private static int RoundTo(float value)

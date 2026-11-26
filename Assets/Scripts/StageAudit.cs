@@ -56,7 +56,7 @@ namespace OneTapDemolition
         }
 
         /// <summary>ルール上の期待値: 撃った列(先頭から count 発)の合計スコア・ボーナス階を壊したか・そこで終わるか。</summary>
-        private static Expect Model(StageSpec spec, float hb, List<int> taps, int count)
+        private static Expect Model(StageSpec spec, float hb, List<int> taps, List<float> times, int count)
         {
             int limit = spec.Floors.Length;
             int shots = spec.Shots;
@@ -64,42 +64,13 @@ namespace OneTapDemolition
             for (int i = 0; i < count; i++)
             {
                 int j = taps[i];
-                e.Score += ScoreRules.SimulateTap(spec.Floors, j, limit, hb);
+                e.Score += ScoreRules.SimulateTap(spec.Floors, j, limit, hb, times[i]);
                 e.Bonus |= ScoreRules.ChainIncludesBonus(spec.Floors, j, limit);
                 limit = j;
                 shots--;
             }
             e.Ended = limit <= 0 || shots <= 0;
             return e;
-        }
-
-        /// <summary>最高得点になる撃ち方(BestScoreと同じ探索で手順を復元)。</summary>
-        private static int BestPlan(StageSpec spec, float hb, int limit, int shots, List<int> plan)
-        {
-            if (shots <= 0 || limit <= 0)
-            {
-                return 0;
-            }
-            int best = 0;
-            int bestTap = -1;
-            List<int> bestRest = null;
-            for (int j = 0; j < limit; j++)
-            {
-                List<int> rest = new List<int>();
-                int total = ScoreRules.SimulateTap(spec.Floors, j, limit, hb) + BestPlan(spec, hb, j, shots - 1, rest);
-                if (total > best)
-                {
-                    best = total;
-                    bestTap = j;
-                    bestRest = rest;
-                }
-            }
-            if (bestTap >= 0)
-            {
-                plan.Add(bestTap);
-                plan.AddRange(bestRest);
-            }
-            return best;
         }
 
         private IEnumerator Run(int from, int to, int randomPlans)
@@ -139,9 +110,10 @@ namespace OneTapDemolition
                     float hb = ScoreManager.Instance != null ? ScoreManager.Instance.HistoryBonus : 0f;
 
                     List<int> taps = new List<int>();
+                    List<float> times = new List<float>();
                     if (optimal)
                     {
-                        BestPlan(spec, hb, spec.Floors.Length, spec.Shots, taps);
+                        ScoreRules.BestPlan(spec.Floors, spec.Floors.Length, spec.Shots, hb, taps, times);
                     }
 
                     string tag = "stage " + stage + (optimal ? " [optimal]" : " [random#" + variant + "]");
@@ -169,10 +141,12 @@ namespace OneTapDemolition
                         {
                             j = rng.Next(0, limit);
                             taps.Add(j);
+                            times.Add(ScoreRules.SampleTime(rng.Next(ScoreRules.GateSampleCount)));
                         }
 
                         BuildingTower tower = gm.CurrentTower;
                         Floor floor = tower.Floors[j];
+                        GateClock.Now = times[done];
                         if (!tower.RequestDemolish(floor, floor.transform.position + Vector3.back * 0.5f))
                         {
                             issues.AppendLine(tag + ": shot at " + j + " REJECTED");
@@ -184,7 +158,7 @@ namespace OneTapDemolition
                         yield return WaitWhile(gm, GameState.Resolving);
                         yield return WaitFrames(3);
 
-                        Expect ex = Model(spec, hb, taps, done);
+                        Expect ex = Model(spec, hb, taps, times, done);
                         int actual = ScoreManager.Instance.CurrentScore;
                         if (actual != ex.Score)
                         {
@@ -218,7 +192,7 @@ namespace OneTapDemolition
                         continue;
                     }
 
-                    Expect final = Model(spec, hb, taps, done);
+                    Expect final = Model(spec, hb, taps, times, done);
                     bool expectFailed = final.Score < spec.TargetScore;
                     int expectStars = expectFailed ? 0 : 1 + (final.Bonus ? 1 : 0) + (final.Score >= spec.StarScore ? 1 : 0);
                     string summary = tag + " taps=[" + string.Join(",", taps) + "] score=" + lastResult.Score + "/" + spec.OptimalScore

@@ -24,6 +24,9 @@ namespace OneTapDemolition
         private static readonly Color GateX2Color = new Color(0.55f, 1f, 0.6f, 1f);
         private static readonly Color GateX3Color = new Color(1f, 0.85f, 0.25f, 1f);
         private static readonly Color GateBadColor = new Color(1f, 0.45f, 0.45f, 1f);
+        private static readonly Color GateNeutralColor = new Color(0.72f, 0.8f, 0.92f, 1f);
+        // 倍率が変わる何秒前から予告の光を出すか
+        private const float GateWarningSeconds = 0.3f;
         private static readonly Color BonusColor = new Color(1f, 0.82f, 0.2f, 1f);
 
         [Header("Physics")]
@@ -56,6 +59,8 @@ namespace OneTapDemolition
         private AimState aimState = AimState.None;
         private bool cracking;
         private Vector3 restPosition;
+        private bool gateLocked;
+        private float shownGateValue = -1f;
 
         public FloorSpec Spec { get; private set; } = FloorSpec.Normal;
         public int FloorIndex => floorIndex;
@@ -105,6 +110,8 @@ namespace OneTapDemolition
             floorIndex = index;
             ownerTower = tower;
             isDemolished = false;
+            gateLocked = false;
+            shownGateValue = -1f;
             rb.isKinematic = true;
 
             if (accentBand != null)
@@ -122,21 +129,9 @@ namespace OneTapDemolition
             switch (spec.Kind)
             {
                 case FloorKind.Gate:
-                    if (spec.GateValue >= 3f)
-                    {
-                        kindTint = GateX3Color;
-                        label = "×3";
-                    }
-                    else if (spec.GateValue >= 2f)
-                    {
-                        kindTint = GateX2Color;
-                        label = "×2";
-                    }
-                    else
-                    {
-                        kindTint = GateBadColor;
-                        label = "÷2";
-                    }
+                    shownGateValue = spec.ValueAt(GateClock.Now);
+                    kindTint = TintForGate(shownGateValue);
+                    label = LabelForGate(shownGateValue);
                     break;
                 case FloorKind.Bonus:
                     kindTint = BonusColor;
@@ -157,6 +152,84 @@ namespace OneTapDemolition
             SetAim(AimState.None);
         }
 
+        private static string LabelForGate(float value)
+        {
+            if (value >= 3f)
+            {
+                return "×3";
+            }
+            if (value >= 2f)
+            {
+                return "×2";
+            }
+            return value >= 1f ? "×1" : "÷2";
+        }
+
+        private static Color TintForGate(float value)
+        {
+            if (value >= 3f)
+            {
+                return GateX3Color;
+            }
+            if (value >= 2f)
+            {
+                return GateX2Color;
+            }
+            return value >= 1f ? GateNeutralColor : GateBadColor;
+        }
+
+        /// <summary>ライブゲートの現在の倍率を看板と階の色に反映する。</summary>
+        private void ShowGateValue(float value)
+        {
+            shownGateValue = value;
+            kindTint = TintForGate(value);
+            debrisTint = Color.Lerp(kindTint, FallbackDebrisTint, 0.2f);
+            if (badge != null)
+            {
+                badge.SetLabel(LabelForGate(value), kindTint);
+                badge.Pop();
+            }
+            ApplyTint(1f);
+        }
+
+        private void RefreshLiveGate()
+        {
+            float t = GateClock.Now;
+            float value = Spec.ValueAt(t);
+            if (!Mathf.Approximately(value, shownGateValue))
+            {
+                ShowGateValue(value);
+            }
+
+            if (badge != null)
+            {
+                float remaining = Spec.TimeToChange(t);
+                badge.SetWarning(remaining < GateWarningSeconds ? 1f - remaining / GateWarningSeconds : 0f);
+            }
+        }
+
+        /// <summary>
+        /// タップが確定した時刻の倍率に固定する。連鎖が崩れる間に看板が切り替わって、掛かる倍率と食い違わないようにする。
+        /// </summary>
+        public void LockGate(float t)
+        {
+            if (!Spec.IsLive || gateLocked)
+            {
+                return;
+            }
+            gateLocked = true;
+            float value = Spec.ValueAt(t);
+            if (!Mathf.Approximately(value, shownGateValue))
+            {
+                ShowGateValue(value);
+            }
+            if (badge != null)
+            {
+                badge.SetWarning(0f);
+                badge.Pop();
+            }
+        }
+
         /// <summary>
         /// 狙っている間のハイライト。Targetはタップ位置、InChainは巻き込まれる階。
         /// </summary>
@@ -171,7 +244,15 @@ namespace OneTapDemolition
         /// </summary>
         private void Update()
         {
-            if (isDemolished || Spec.Kind != FloorKind.Bonus || aimState != AimState.None || cracking)
+            if (isDemolished)
+            {
+                return;
+            }
+            if (Spec.IsLive && !gateLocked)
+            {
+                RefreshLiveGate();
+            }
+            if (Spec.Kind != FloorKind.Bonus || aimState != AimState.None || cracking)
             {
                 return;
             }
