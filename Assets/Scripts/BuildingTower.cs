@@ -29,6 +29,7 @@ namespace OneTapDemolition
         private int limit;
         private bool resolving;
         private float chainTime;
+        private float chainStartMultiplier = 1f;
 
         public StageSpec Spec => spec;
         public int FloorCount => floors.Count;
@@ -37,6 +38,7 @@ namespace OneTapDemolition
         public bool IsResolving => resolving;
 
         public float TotalHeight => floors.Count * floorHeight;
+        public float FloorHeight => floorHeight;
 
         public void BuildTower(StageSpec stageSpec)
         {
@@ -117,7 +119,7 @@ namespace OneTapDemolition
         /// TapDemolishControllerからのタップ確定を受けて、その階と上階の連鎖崩落を開始する。
         /// ショットを消費できなかった場合(ステージ外・崩落中・弾切れ)は何もしない。
         /// </summary>
-        public bool RequestDemolish(Floor tappedFloor, Vector3 hitPoint)
+        public bool RequestDemolish(Floor tappedFloor, Vector3 hitPoint, float startMultiplier = 1f)
         {
             if (resolving || tappedFloor == null || tappedFloor.IsDemolished || tappedFloor.FloorIndex >= limit)
             {
@@ -129,6 +131,7 @@ namespace OneTapDemolition
             }
 
             resolving = true;
+            chainStartMultiplier = startMultiplier;
             SetAimPreview(-1);
 
             int startIndex = tappedFloor.FloorIndex;
@@ -169,7 +172,8 @@ namespace OneTapDemolition
         private IEnumerator CollapseFromFloor(int startIndex, Vector3 hitPoint)
         {
             int chainStep = 0;
-            float gateProduct = 1f;
+            // スイープ解体ではコンボ・PERFECTの倍率から始まる(従来ルールは1)
+            float gateProduct = chainStartMultiplier;
 
             for (int i = startIndex; i < limit; i++)
             {

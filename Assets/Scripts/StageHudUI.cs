@@ -227,7 +227,7 @@ namespace OneTapDemolition
         private void RefreshHintButton()
         {
             GameManager gm = GameManager.Instance;
-            bool can = gm != null && gm.State == GameState.Playing && gm.ShotsLeft > 0 && gm.CurrentTower != null
+            bool can = !SweepRules.Enabled && gm != null && gm.State == GameState.Playing && gm.ShotsLeft > 0 && gm.CurrentTower != null
                 && gm.CurrentTower.AliveCount > 0 && hintIndex < 0 && AdsManager.Instance != null && AdsManager.Instance.IsRewardedReady;
             hintButton.gameObject.SetActive(can);
         }
@@ -542,7 +542,7 @@ namespace OneTapDemolition
         {
             RefreshHintButton();
             // MAXに届いたあと、次のショットを待っている間だけFINISHを出す
-            finishButton.gameObject.SetActive(gaugeMaxed && state == GameState.Playing);
+            finishButton.gameObject.SetActive(!SweepRules.Enabled && gaugeMaxed && state == GameState.Playing);
         }
 
         /// <summary>
@@ -684,8 +684,11 @@ namespace OneTapDemolition
             gaugeMaxed = true;
             StartCoroutine(Pop(barRoot, 1.14f, 0.28f));
             StartCoroutine(FlashRoutine());
-            ScoreFeedbackUI.Instance?.ShowBanner("CLEAR!", FillMax);
-            finishButton.gameObject.SetActive(GameManager.Instance != null && GameManager.Instance.State == GameState.Playing);
+            if (!SweepRules.Enabled)
+            {
+                ScoreFeedbackUI.Instance?.ShowBanner("CLEAR!", FillMax);
+            }
+            finishButton.gameObject.SetActive(!SweepRules.Enabled && GameManager.Instance != null && GameManager.Instance.State == GameState.Playing);
         }
 
         private IEnumerator FlashRoutine()

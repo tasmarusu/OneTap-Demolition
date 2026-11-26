@@ -41,6 +41,11 @@ namespace OneTapDemolition
         /// </summary>
         public static StageSpec Generate(int stageIndex, float historyBonus)
         {
+            if (SweepRules.Enabled)
+            {
+                return SweepRules.BuildStage(stageIndex, historyBonus);
+            }
+
             StageSpec fairFallback = null;
             StageSpec feasibleFallback = null;
             StageSpec last = null;

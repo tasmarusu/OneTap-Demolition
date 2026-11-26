@@ -109,6 +109,8 @@ namespace OneTapDemolition
         public int FirstOptimalTap;
         public int TargetScore;
         public int StarScore;
+        /// <summary>スイープ解体の弱点の並び(当てる順の階番号)。従来ルールではnull。</summary>
+        public int[] SweepWeak;
     }
 
     /// <summary>

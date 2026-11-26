@@ -54,6 +54,12 @@ namespace OneTapDemolition
 
         private void Update()
         {
+            if (SweepRules.Enabled)
+            {
+                // スイープ解体ではSweepPlayがタップを受ける
+                return;
+            }
+
             Vector2 position;
             bool down, held, up;
             ReadPointer(out position, out down, out held, out up);

@@ -124,6 +124,11 @@ namespace OneTapDemolition
                 ScoreManager.Instance.DisplayedScoreChanged += OnDisplayedScoreChanged;
             }
 
+            if (SweepRules.Enabled && GetComponent<SweepPlay>() == null)
+            {
+                gameObject.AddComponent<SweepPlay>();
+            }
+
             CurrentStageIndex = Mathf.Max(1, PlayerPrefs.GetInt(StageIndexKey, 1));
             PrepareStage(CurrentStageIndex, 0);
         }
@@ -270,7 +275,9 @@ namespace OneTapDemolition
             // (満点を狙える)。撃ち切る/壊し切る/FINISHを押すと終わる。
             if (towerDone || ShotsLeft <= 0)
             {
-                EndStage(score < CurrentSpec.TargetScore);
+                // スイープ解体は「更地にできたか」で成否が決まる。点数は☆の数だけに効く
+                bool failed = SweepRules.Enabled ? !towerDone : score < CurrentSpec.TargetScore;
+                EndStage(failed);
             }
             else
             {
@@ -284,7 +291,7 @@ namespace OneTapDemolition
         public void FinishStage()
         {
             int score = ScoreManager.Instance != null ? ScoreManager.Instance.CurrentScore : 0;
-            if (State == GameState.Playing && CurrentSpec != null && score >= CurrentSpec.TargetScore)
+            if (!SweepRules.Enabled && State == GameState.Playing && CurrentSpec != null && score >= CurrentSpec.TargetScore)
             {
                 EndStage(false);
             }

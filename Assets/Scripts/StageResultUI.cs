@@ -111,7 +111,9 @@ namespace OneTapDemolition
 
         private void OnStageStarted(StageSpec spec, int shots)
         {
-            readyInfo.text = "押して狙う → 倍率が高い瞬間に離す    ショット " + shots;
+            readyInfo.text = SweepRules.Enabled
+                ? "光る帯が赤い階に重なった瞬間にタップ!    ショット " + shots
+                : "押して狙う → 倍率が高い瞬間に離す    ショット " + shots;
         }
 
         private void OnStateChanged(GameState state)
@@ -243,7 +245,7 @@ namespace OneTapDemolition
             scoreText.text = r.Score + " / " + r.Spec.OptimalScore;
             if (r.Failed)
             {
-                bestText.text = "あと " + Mathf.Max(0, r.Spec.TargetScore - r.Score) + " ptでクリア";
+                bestText.text = SweepRules.Enabled ? "ビルを更地にできなかった…" : "あと " + Mathf.Max(0, r.Spec.TargetScore - r.Score) + " ptでクリア";
             }
             else
             {

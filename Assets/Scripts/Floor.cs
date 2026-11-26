@@ -6,7 +6,9 @@ namespace OneTapDemolition
     {
         None,
         InChain,
-        Target
+        Target,
+        /// <summary>スイープ解体の弱点(ここに当てると上がまとめて崩れる)。赤く脈打つ。</summary>
+        Weak
     }
 
     /// <summary>
@@ -252,6 +254,12 @@ namespace OneTapDemolition
             {
                 RefreshLiveGate();
             }
+            if (aimState == AimState.Weak && !cracking)
+            {
+                float beat = 0.5f + 0.5f * Mathf.Sin(Time.time * 9f);
+                ApplyTint(Mathf.Lerp(0.85f, 1.35f, beat));
+                return;
+            }
             if (Spec.Kind != FloorKind.Bonus || aimState != AimState.None || cracking)
             {
                 return;
@@ -313,6 +321,9 @@ namespace OneTapDemolition
                     break;
                 case AimState.InChain:
                     tint = Color.Lerp(kindTint, Color.white, 0.3f);
+                    break;
+                case AimState.Weak:
+                    tint = Color.Lerp(kindTint, new Color(1f, 0.3f, 0.12f, 1f), 0.8f);
                     break;
             }
 
